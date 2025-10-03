@@ -1,13 +1,13 @@
 
 const { GoogleGenAI, Modality } = require("@google/genai");
 
-const API_KEY = process.env.API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-if (!API_KEY) {
-    throw new Error("API_KEY environment variable not set");
+if (!GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY environment variable not set");
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 const imageEditModel = 'gemini-2.5-flash-image-preview';
 
 const processApiResponse = (response) => {

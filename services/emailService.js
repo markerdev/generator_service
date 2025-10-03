@@ -1,55 +1,59 @@
 
 const nodemailer = require('nodemailer');
 
-// --- Production Email Configuration ---
-// These variables must be set in your cPanel Node.js App environment.
-const smtpConfig = {
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-};
+let transporter;
 
-if (!smtpConfig.host || !smtpConfig.auth.user || !smtpConfig.auth.pass) {
-    console.error("!!! FATAL: SMTP environment variables not set. Email will not be sent.");
+// This function creates a test transporter using Ethereal for development.
+// It creates a single test account and reuses the transporter instance.
+async function getTestTransporter() {
+    if (transporter) {
+        return transporter;
+    }
+
+    console.log('Creating a Nodemailer test account for development...');
+    const testAccount = await nodemailer.createTestAccount();
+    console.log('Test account created:', testAccount.user);
+
+    transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false, // true for 465, false for other ports
+        auth: {
+            user: testAccount.user, // generated ethereal user
+            pass: testAccount.pass, // generated ethereal password
+        },
+    });
+
+    return transporter;
 }
 
 /**
- * Sends an email with download links for the generated images using production SMTP credentials.
+ * Sends an email with download links for the generated images.
  * @param {string} toEmail The recipient's email address.
  * @param {string[]} downloadUrls An array of URLs for the images.
  */
 async function sendResultsEmail(toEmail, downloadUrls) {
-  if (!smtpConfig.host) {
-    console.error("Skipping email send because SMTP is not configured.");
-    return;
-  }
-  
-  const transporter = nodemailer.createTransport(smtpConfig);
+  const mailTransporter = await getTestTransporter();
 
   let htmlBody = `
     <h1>Your AI Balcony Glazing Proposals are Ready!</h1>
-    <p>Thank you for using our service. You can view and download your generated images using the links below.</p>
+    <p>Thank you for using our service. You can view your generated images using the links below.</p>
+    <p><strong>Note:</strong> These images are hosted for development purposes. In a production environment, these would be persistent links.</p>
     <ul>
   `;
   
-  downloadUrls.forEach((url, index) => {
-    let imageName = '';
-    if (url.includes('glazed')) imageName = 'Image 1: Glazed Balconies';
-    else if (url.includes('modernized')) imageName = 'Image 2: Modernized Facade';
-    else if (url.includes('cozy')) imageName = 'Image 3: Cozy Balcony Atmosphere';
-    else imageName = `Image ${index + 1}`;
-    
+  downloadUrls.forEach(url => {
+    let imageName = "Generated Image";
+    if (url.includes('glazed')) imageName = "Proposal 1: Facade with New Glazings";
+    if (url.includes('modernized')) imageName = "Proposal 2: Modernized Facade";
+    if (url.includes('cozy')) imageName = "Proposal 3: Cozy Balcony Atmosphere";
     htmlBody += `<li><a href="${url}">${imageName}</a></li>`;
   });
 
   htmlBody += '</ul><p>Best regards,<br/>The AI Balcony Glazing Team</p>';
 
   const mailOptions = {
-    from: `"AI Generator" <${process.env.SMTP_USER}>`, // Use your sending email address
+    from: `"AI Generator" <no-reply@example.com>`,
     to: toEmail,
     subject: 'Your Generated Balcony Images',
     html: htmlBody,
@@ -57,8 +61,10 @@ async function sendResultsEmail(toEmail, downloadUrls) {
 
   try {
     let info = await transporter.sendMail(mailOptions);
-    console.log('Message sent successfully to %s: %s', toEmail, info.messageId);
-
+    console.log('Message sent: %s', info.messageId);
+    // Log the Ethereal preview URL to the console
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    console.log('Email sent successfully! You can preview it here: %s', previewUrl);
   } catch (error) {
     console.error('Error sending email:', error);
     throw new Error('Failed to send results email.');

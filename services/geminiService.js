@@ -8,7 +8,7 @@ if (!GEMINI_API_KEY) {
 }
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-const imageEditModel = 'gemini-2.5-flash-image-preview';
+const imageEditModel = 'gemini-2.5-flash-image';
 
 const processApiResponse = (response) => {
     if (response.promptFeedback?.blockReason) {
@@ -118,7 +118,7 @@ const generateFacadeImages = async (
                  const materialMap = {
                     'lasi-metalli': 'kirkasta lasia ja siroja, tummia metallirakenteita',
                     'puusaleet': 'tyylikkäitä pystysuoria puusäleitä',
-                    'tumma-metalli': 'ohuita, pystysuoria tummia metallipintoja (pinnakaide)',
+                    'tumma-metalli': 'ohueita, pystysuoria tummia metallipintoja (pinnakaide)',
                 };
                 const materialInstruction = materialMap[railingMaterial] || 'moderneja materiaaleja';
                 cozyPromptParts.push(`Erityisen tärkeää: Korvaa alkuperäisen kuvan parvekekaide kokonaan uudella kaiteella, joka on tehty materiaalista ${materialInstruction}.`);

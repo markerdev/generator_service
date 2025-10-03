@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
@@ -22,33 +21,27 @@ if (!fs.existsSync(imagesDir)) {
 // --- CORS Configuration ---
 // Whitelist the frontend origin from environment variables for security and flexibility.
 const allowedOrigins = [
-    // Production frontend URL
     process.env.FRONTEND_URL,
-    // Add localhost for local development if needed
-    'http://localhost:3000', // Example for a common local dev server
+    'http://localhost:3000',
     'http://localhost:8000'
-].filter(Boolean); // .filter(Boolean) removes any undefined/null entries
+].filter(Boolean); // .filter(Boolean) removes any undefined/null entries if FRONTEND_URL is not set.
 
-console.log('Allowed CORS origins:', allowedOrigins);
+if (allowedOrigins.length === 0 && process.env.NODE_ENV === 'production') {
+    console.error('\x1b[31m%s\x1b[0m', 'FATAL: FRONTEND_URL environment variable is not set in production. CORS will block all requests.');
+} else {
+    console.log('Allowed CORS origins:', allowedOrigins);
+}
 
+// Simplified and more robust CORS configuration
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests) and whitelisted origins
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS: Request from origin '${origin}' was blocked.`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: allowedOrigins,
   methods: 'POST',
   allowedHeaders: 'Content-Type',
+  optionsSuccessStatus: 200 // For legacy browser compatibility
 };
 
-// Enable CORS with the specified options.
-// app.options is for pre-flight requests.
+// Enable CORS for all routes, which also handles pre-flight OPTIONS requests.
 app.use(cors(corsOptions));
-app.options('/generate-images', cors(corsOptions)); // Specifically handle pre-flight for your main endpoint
 
 
 // Serve static files from the 'public' directory

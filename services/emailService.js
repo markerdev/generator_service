@@ -1,52 +1,27 @@
-const nodemailer = require('nodemailer');
 
-// A single transporter instance can be reused for the app's lifetime.
-let transporter;
-
-// This function initializes the transporter. It's designed to be called once.
-async function initializeTransporter() {
-    // Production configuration: Use Gmail if credentials are provided in environment variables.
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        console.log('Production email environment variables found. Configuring Gmail transporter...');
-        transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.EMAIL_USER,
-                // IMPORTANT: Use a Google App Password here, not your regular password!
-                pass: process.env.EMAIL_PASS,
-            },
-        });
-        console.log('Gmail transporter configured successfully.');
-    } 
-    // Development configuration: Fallback to a test account using Ethereal.
-    else {
-        console.log('No production email credentials. Creating a Nodemailer test account for development...');
-        const testAccount = await nodemailer.createTestAccount();
-        console.log('Test account created:', testAccount.user);
-
-        transporter = nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false, // true for 465, false for other ports
-            auth: {
-                user: testAccount.user, // generated ethereal user
-                pass: testAccount.pass, // generated ethereal password
-            },
-        });
-        console.log('Ethereal test transporter configured.');
-    }
-}
+const API_KEY = process.env.BREVO_API_KEY;
+const SENDER_EMAIL = process.env.SENDER_EMAIL || 'no-reply@ai-generator.com';
+const SENDER_NAME = "AI Balcony Generator";
 
 /**
- * Sends an email with download links for the generated images.
- * It ensures the transporter is initialized before trying to send an email.
+ * Sends an email using the Brevo API with download links for the generated images.
+ * This method uses a direct HTTP API call, which is not blocked by cloud providers.
  * @param {string} toEmail The recipient's email address.
  * @param {string[]} downloadUrls An array of URLs for the images.
  */
 async function sendResultsEmail(toEmail, downloadUrls) {
-    // Initialize the transporter if it hasn't been already.
-    if (!transporter) {
-        await initializeTransporter();
+    if (!API_KEY) {
+        console.error('BREVO_API_KEY is not set. Cannot send email.');
+        // In a real scenario, you might want to log this to a monitoring service.
+        // For development, we can just print the URLs to the console.
+        console.log(`--- DEV ONLY: Email not sent. Image URLs for ${toEmail} ---`);
+        console.log(downloadUrls.join('\n'));
+        console.log('---------------------------------------------------------');
+        // We throw an error to indicate failure in production.
+        if (process.env.NODE_ENV === 'production') {
+             throw new Error('Email service is not configured.');
+        }
+        return;
     }
 
     let htmlBody = `
@@ -60,40 +35,54 @@ async function sendResultsEmail(toEmail, downloadUrls) {
         if (url.includes('glazed')) imageName = "Proposal 1: Facade with New Glazings";
         if (url.includes('modernized')) imageName = "Proposal 2: Modernized Facade";
         if (url.includes('cozy')) imageName = "Proposal 3: Cozy Balcony Atmosphere";
-        // Use an inline style for better email client compatibility
+        // Use inline style for better email client compatibility
         htmlBody += `
             <li style="margin-bottom: 20px;">
                 <strong style="display: block; margin-bottom: 5px;">${imageName}</strong>
-                <a href="${url}">
+                <a href="${url}" target="_blank">
                     <img src="${url}" alt="${imageName}" style="max-width: 400px; height: auto; border: 1px solid #ddd; border-radius: 4px;">
                 </a>
                 <br>
-                <a href="${url}" style="font-size: 14px;">View full size</a>
+                <a href="${url}" target="_blank" style="font-size: 14px;">View full size</a>
             </li>`;
     });
 
     htmlBody += '</ul><p>Best regards,<br/>The AI Balcony Glazing Team</p>';
 
-    const mailOptions = {
-        from: `"AI Generator" <${process.env.EMAIL_USER || 'no-reply@example.com'}>`,
-        to: toEmail,
+    const payload = {
+        sender: {
+            name: SENDER_NAME,
+            email: SENDER_EMAIL,
+        },
+        to: [{
+            email: toEmail,
+        }],
         subject: 'Your Generated Balcony Images',
-        html: htmlBody,
+        htmlContent: htmlBody,
     };
 
     try {
-        let info = await transporter.sendMail(mailOptions);
-        console.log('Message sent: %s', info.messageId);
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'api-key': API_KEY,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
 
-        // If using Ethereal, log the preview URL.
-        const previewUrl = nodemailer.getTestMessageUrl(info);
-        if (previewUrl) {
-            console.log('Email sent successfully! You can preview it here: %s', previewUrl);
-        } else {
-            console.log(`Email sent successfully to ${toEmail}`);
+        if (!response.ok) {
+            const errorBody = await response.json();
+            console.error('Brevo API Error:', errorBody);
+            throw new Error(`Failed to send email via Brevo API. Status: ${response.status}`);
         }
+
+        const data = await response.json();
+        console.log(`Email sent successfully to ${toEmail}. Message ID: ${data.messageId}`);
+
     } catch (error) {
-        console.error('Error sending email:', error);
+        console.error('Error sending email via Brevo:', error);
         throw new Error('Failed to send results email.');
     }
 }

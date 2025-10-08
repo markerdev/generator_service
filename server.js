@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
@@ -6,6 +5,7 @@ const cors = require('cors');
 const { generateFacadeImages } = require('./services/geminiService');
 const { sendResultsEmail } = require('./services/emailService');
 const { uploadFile, generateV4ReadSignedUrl } = require('./services/storageService');
+const { submitToHubSpot } = require('./services/hubspotService'); // Import the new HubSpot service
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -46,12 +46,16 @@ app.post('/generate-images', upload.fields(uploadFields), async (req, res) => {
     try {
         console.log('Received request to /generate-images');
 
-        const { email, modernizationChoices, facadeColor, railingMaterial } = req.body;
+        const { 
+            email, modernizationChoices, facadeColor, railingMaterial,
+            firstName, lastName, housingCompany, phoneNumber 
+        } = req.body;
+        
         const facadeImageFile = req.files.facadeImage ? req.files.facadeImage[0] : null;
         const balconyImageFile = req.files.balconyImage ? req.files.balconyImage[0] : null;
 
-        if (!facadeImageFile || !email) {
-            return res.status(400).json({ message: 'Facade image and email are required.' });
+        if (!facadeImageFile || !email || !firstName || !lastName) {
+            return res.status(400).json({ message: 'Facade image, email, first name, and last name are required.' });
         }
         
         // --- Start of synchronous processing ---
@@ -108,15 +112,22 @@ app.post('/generate-images', upload.fields(uploadFields), async (req, res) => {
         // Respond to the client with the URLs
         res.status(200).json({ urls: downloadUrls });
         
-        // --- Start background task for sending email ---
+        // --- Start background tasks for email and HubSpot ---
+        const userData = { firstName, lastName, housingCompany, phoneNumber, email };
+        
+        // Submit to HubSpot (fire-and-forget, with error logging)
+        submitToHubSpot(userData)
+            .catch(err => console.error('HubSpot submission failed in the background:', err));
+
+        // Send email (fire-and-forget, with error logging)
         if (downloadUrls.length > 0) {
-            sendResultsEmail(email, downloadUrls)
+            sendResultsEmail(email, downloadUrls, userData)
                 .then(() => console.log(`Successfully sent email to ${email} in the background.`))
                 .catch(err => console.error(`Failed to send email to ${email} in the background:`, err));
         } else {
             console.warn(`No images were generated or uploaded for ${email}. No email will be sent.`);
         }
-        // --- End background task ---
+        // --- End background tasks ---
 
     } catch (error) {
         console.error('Error in /generate-images endpoint:', error);

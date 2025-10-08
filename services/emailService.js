@@ -1,4 +1,3 @@
-
 const API_KEY = process.env.BREVO_API_KEY;
 const SENDER_EMAIL = process.env.SENDER_EMAIL || 'no-reply@ai-generator.com';
 const SENDER_NAME = "AI Balcony Generator";
@@ -8,8 +7,14 @@ const SENDER_NAME = "AI Balcony Generator";
  * This method uses a direct HTTP API call, which is not blocked by cloud providers.
  * @param {string} toEmail The recipient's email address.
  * @param {string[]} downloadUrls An array of URLs for the images.
+ * @param {object} userData An object containing user-submitted details.
+ * @param {string} userData.firstName The user's first name.
+ * @param {string} userData.lastName The user's last name.
+ * @param {string} userData.email The user's email.
+ * @param {string} [userData.housingCompany] The user's housing company (optional).
+ * @param {string} [userData.phoneNumber] The user's phone number (optional).
  */
-async function sendResultsEmail(toEmail, downloadUrls) {
+async function sendResultsEmail(toEmail, downloadUrls, userData) {
     if (!API_KEY) {
         console.error('BREVO_API_KEY is not set. Cannot send email.');
         // In a real scenario, you might want to log this to a monitoring service.
@@ -24,19 +29,24 @@ async function sendResultsEmail(toEmail, downloadUrls) {
         return;
     }
 
-    let htmlBody = `
-        <h1>Your AI Balcony Glazing Proposals are Ready!</h1>
-        <p>Thank you for using our service. You can view your generated images using the links below.</p>
-        <ul>
+    let userInfoHtml = `
+        <div style="padding: 10px; border: 1px solid #eee; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 25px;">
+            <h2 style="font-size: 16px; margin-top: 0;">Summary of Your Submission</h2>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Name:</strong> ${userData.firstName} ${userData.lastName}</p>
+            <p style="margin: 5px 0; font-size: 14px;"><strong>Email:</strong> ${userData.email}</p>
+            ${userData.phoneNumber ? `<p style="margin: 5px 0; font-size: 14px;"><strong>Phone:</strong> ${userData.phoneNumber}</p>` : ''}
+            ${userData.housingCompany ? `<p style="margin: 5px 0; font-size: 14px;"><strong>Housing Company:</strong> ${userData.housingCompany}</p>` : ''}
+        </div>
     `;
-  
+
+    let imagesHtml = '<ul>';
     downloadUrls.forEach(url => {
         let imageName = "Generated Image";
         if (url.includes('glazed')) imageName = "Proposal 1: Facade with New Glazings";
         if (url.includes('modernized')) imageName = "Proposal 2: Modernized Facade";
         if (url.includes('cozy')) imageName = "Proposal 3: Cozy Balcony Atmosphere";
         // Use inline style for better email client compatibility
-        htmlBody += `
+        imagesHtml += `
             <li style="margin-bottom: 20px;">
                 <strong style="display: block; margin-bottom: 5px;">${imageName}</strong>
                 <a href="${url}" target="_blank">
@@ -46,8 +56,17 @@ async function sendResultsEmail(toEmail, downloadUrls) {
                 <a href="${url}" target="_blank" style="font-size: 14px;">View full size</a>
             </li>`;
     });
+    imagesHtml += '</ul>';
 
-    htmlBody += '</ul><p>Best regards,<br/>The AI Balcony Glazing Team</p>';
+    let htmlBody = `
+        <h1>Your AI Balcony Glazing Proposals are Ready!</h1>
+        <p>Thank you for using our service. Below are the generated images and a summary of the information you provided.</p>
+        ${userInfoHtml}
+        <h2 style="font-size: 16px;">Generated Proposals</h2>
+        ${imagesHtml}
+        <p>Best regards,<br/>The AI Balcony Glazing Team</p>
+    `;
+
 
     const payload = {
         sender: {

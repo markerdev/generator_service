@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
@@ -53,21 +54,8 @@ app.post('/generate-images', upload.fields(uploadFields), async (req, res) => {
             return res.status(400).json({ message: 'Facade image and email are required.' });
         }
         
-        res.status(202).json({ message: 'Processing started. Results will be sent to your email.' });
-        
-        // Process the request in the background without holding up the response
-        processRequest(email, facadeImageFile, balconyImageFile, modernizationChoices, facadeColor, railingMaterial).catch(err => {
-            console.error(`Unhandled error in background processing for ${email}:`, err);
-        });
-
-    } catch (error) {
-        console.error('Error in /generate-images endpoint:', error);
-    }
-});
-
-const processRequest = async (email, facadeImageFile, balconyImageFile, modernizationChoices, facadeColor, railingMaterial) => {
-    try {
-        console.log(`Starting async processing for ${email}`);
+        // --- Start of synchronous processing ---
+        console.log(`Starting synchronous processing for ${email}`);
         const parsedModernizationChoices = JSON.parse(modernizationChoices);
         
         const facadeBase64 = facadeImageFile.buffer.toString('base64');
@@ -117,18 +105,25 @@ const processRequest = async (email, facadeImageFile, balconyImageFile, moderniz
         
         console.log('Generated download URLs from GCS:', downloadUrls);
         
+        // Respond to the client with the URLs
+        res.status(200).json({ urls: downloadUrls });
+        
+        // --- Start background task for sending email ---
         if (downloadUrls.length > 0) {
-            await sendResultsEmail(email, downloadUrls);
-            console.log(`Successfully processed and sent email to ${email}`);
+            sendResultsEmail(email, downloadUrls)
+                .then(() => console.log(`Successfully sent email to ${email} in the background.`))
+                .catch(err => console.error(`Failed to send email to ${email} in the background:`, err));
         } else {
             console.warn(`No images were generated or uploaded for ${email}. No email will be sent.`);
         }
+        // --- End background task ---
 
     } catch (error) {
-        console.error(`Failed to process request for ${email}:`, error);
-        // Optional: Send a failure notification email to the user
+        console.error('Error in /generate-images endpoint:', error);
+        // Ensure a response is sent even on error, forwarding the Gemini service message if available.
+        res.status(500).json({ message: error.message || 'An internal server error occurred during image generation.' });
     }
-};
+});
 
 app.get('/', (req, res) => {
     res.send('AI Balcony Glazing Backend is running.');

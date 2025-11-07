@@ -12,8 +12,10 @@ const port = process.env.PORT || 3001;
 // --- CORS Configuration ---
 const allowedOrigins = [
     process.env.FRONTEND_URL,
+    'https://whm50.louhi.net',
     'http://localhost:3000',
-    'http://localhost:8000'
+    'http://localhost:8000',
+    'http://localhost:5173'
 ].filter(Boolean);
 
 if (allowedOrigins.length === 0 && process.env.NODE_ENV === 'production') {
@@ -23,7 +25,15 @@ if (allowedOrigins.length === 0 && process.env.NODE_ENV === 'production') {
 }
 
 const corsOptions = {
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests) or from whitelisted origins.
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.error(`CORS Blocked: The origin '${origin}' is not in the allowed list.`);
+      callback(new Error('This origin is not allowed by CORS policy.'));
+    }
+  },
   methods: 'POST',
   allowedHeaders: 'Content-Type',
   optionsSuccessStatus: 200
@@ -62,6 +72,7 @@ app.post('/generate-images', upload.fields(uploadFields), async (req, res) => {
             lastName,
             housingCompany,
             phoneNumber,
+            role, // <-- Added role
             modernizationChoices: modernizationChoicesJson,
             facadeColor,
             railingMaterial
@@ -69,7 +80,7 @@ app.post('/generate-images', upload.fields(uploadFields), async (req, res) => {
         
         const modernizationOptions = JSON.parse(modernizationChoicesJson || '[]');
 
-        const userData = { firstName, lastName, email, housingCompany, phoneNumber };
+        const userData = { firstName, lastName, email, housingCompany, phoneNumber, role };
 
         console.log('Calling Gemini API to generate images...');
         const { glazedImage, modernizedImage, cozyBalconyImage } = await generateFacadeImages(

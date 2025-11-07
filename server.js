@@ -5,6 +5,7 @@ const cors = require('cors');
 const { generateFacadeImages } = require('./services/geminiService');
 const { sendResultsEmail } = require('./services/emailService');
 const { uploadFile, generateV4ReadSignedUrl } = require('./services/storageService');
+const { submitToHubSpot } = require('./services/hubspotService'); // Import the new HubSpot service
 
 const app = express();
 const port = process.env.PORT || 3001;
